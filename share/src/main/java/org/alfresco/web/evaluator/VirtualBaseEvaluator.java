@@ -34,7 +34,7 @@ import org.json.simple.JSONObject;
  * @author sdinuta
  *
  */
-public abstract class VirtualBaseEvaluator extends BaseEvaluator
+public abstract class VirtualBaseEvaluator extends BaseEvaluator implements VirtualEvaluator
 {
     /**
      * Checks if the node is a container.

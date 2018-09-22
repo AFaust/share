@@ -539,14 +539,28 @@ var DocList =
    {
       var scopedRoot = config.scoped["DocLibActions"]["actionGroups"],
          groupConfigs, actionGroup, actionConfigs, actionConfig, actionId, actionIndex, actionSubgroup, action,
-         actions = {};
+         actions = {}, requireExplicitEvaluatorForSmartFolders = true, i;
 
       try
       {
          groupConfigs = scopedRoot.getChildren("actionGroup");
          if (groupConfigs)
          {
-            for (var i = 0; i < groupConfigs.size(); i++)
+            // actionGroup config elements are not merged so determine requireExplicitEvaluatorForSmartFolders first
+            for (i = 0; i < groupConfigs.size(); i++)
+            {
+               actionGroup = groupConfigs.get(i);
+               if (actionGroup.getAttribute("id") == groupId)
+               {
+                  // default for requireExplicitEvaluatorForSmartFolders is true for consistency with previous hard-coding
+                  if (actionGroup.getAttribute("requireExplicitEvaluatorForSmartFolders") !== null)
+                  {
+                     requireExplicitEvaluatorForSmartFolders = actionGroup.getAttribute("requireExplicitEvaluatorForSmartFolders") == "true";
+                  }
+               }
+            }
+
+            for (i = 0; i < groupConfigs.size(); i++)
             {
                actionGroup = groupConfigs.get(i);
                if (actionGroup.getAttribute("id") == groupId)
@@ -586,7 +600,7 @@ var DocList =
                               DocList.fnAddIfNotNull(action, actionConfig.getAttribute("additionalCssClasses"), "additionalCssClasses");
 
                               DocList.fnAddIfNotNull(action, DocList.getActionParamConfig(actionConfig), "params");
-                              DocList.fnAddIfNotNull(action, DocList.getGroupEvaluatorConfig(action, actionConfig), "evaluators");
+                              DocList.fnAddIfNotNull(action, DocList.getGroupEvaluatorConfig(action, actionConfig, requireExplicitEvaluatorForSmartFolders), "evaluators");
                               DocList.fnAddIfNotNull(action, DocList.getActionPermissionConfig(actionConfig), "permissions");
                               DocList.fnAddIfNotNull(action, DocList.getOverrideConfig(actionConfig), "overrides");
 
@@ -808,10 +822,11 @@ var DocList =
     * 
     * @param action {object} original action configuration
     * @param actionConfig {object} action configuration from actionGroups
+    * @param requireExplicitEvaluatorForSmartFolders {boolean} flag indicating if action is required to have an explicit evaluator for use in smart folders
     * 
     * @returns {object} evaluators for actionGroup action configuration
     */
-   getGroupEvaluatorConfig: function getGroupEvaluatorConfig(action, actionConfig)
+   getGroupEvaluatorConfig: function getGroupEvaluatorConfig(action, actionConfig, requireExplicitEvaluatorForSmartFolders)
    {
       var evaluators = {};
       if (action["evaluators"])
@@ -819,42 +834,31 @@ var DocList =
          evaluators = action["evaluators"];
       }
       var actionGroupEvaluators = DocList.getEvaluatorConfig(actionConfig);
+      var hasEvaluatorForSmartFolders = false;
       var disableSmartFolderContextValue = "evaluator.doclib.action.DisabledInSmartFolderContext";
       var disableSmartFolderContextQualify = true;
       var disableSmartFolderContextEvaluator = evaluatorHelper.getEvaluator(disableSmartFolderContextValue);
 
-      if (actionGroupEvaluators)
+      if (actionGroupEvaluators && actionConfig.getAttribute("appendEvaluators") == "true")
       {
-         if (actionConfig.getAttribute("appendEvaluators") == "true")
+         for (index in actionGroupEvaluators)
          {
-               for (index in actionGroupEvaluators)
-               {
-                  evaluators[index] = actionGroupEvaluators[index];
-               }
-         }
-         else
-         {
-            evaluators = actionGroupEvaluators;
-            if (disableSmartFolderContextEvaluator != null)
-            {
-               evaluators[disableSmartFolderContextValue] =
-               {
-                  evaluator: disableSmartFolderContextEvaluator,
-                  qualify: disableSmartFolderContextQualify
-               };
-            }
+            evaluators[index] = actionGroupEvaluators[index];
          }
       }
-      else
+
+      for (index in evaluators)
       {
-         if (disableSmartFolderContextEvaluator != null)
+          hasEvaluatorForSmartFolders = hasEvaluatorForSmartFolders || evaluators[index].evaluator.handlesSmartFolderContext == true;
+      }
+
+      if (requireExplicitEvaluatorForSmartFolders && !hasEvaluatorForSmartFolders && disableSmartFolderContextEvaluator != null)
+      {
+         evaluators[disableSmartFolderContextValue] =
          {
-            evaluators[disableSmartFolderContextValue] =
-            {
-               evaluator: disableSmartFolderContextEvaluator,
-               qualify: disableSmartFolderContextQualify
-            };
-         }
+            evaluator: disableSmartFolderContextEvaluator,
+            qualify: disableSmartFolderContextQualify
+         };
       }
       return evaluators;
    },
